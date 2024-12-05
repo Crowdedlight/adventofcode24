@@ -51,7 +51,7 @@ pub fn process(input: &str) -> anyhow::Result<String> {
         if valid_page {
             let middle = p.len() / 2;
             sum += p[middle];
-            println!("Valid vector: {:?}, mid_index: {}, middle element: {}", p, middle, p[middle]);
+            // println!("Valid vector: {:?}, mid_index: {}, middle element: {}", p, middle, p[middle]);
         }
     }
 

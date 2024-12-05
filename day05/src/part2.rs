@@ -53,21 +53,15 @@ pub fn process(input: &str) -> anyhow::Result<String> {
     }
 
     // we got all the invalid pages
+    // for p in p_invalid.iter() {
+        // println!("invalid page: {:?}, rules: {:?}", p.0, p.1);
+    // }
+
+    // go through each page and sort it based on rules for this page. Basic swap sort
     for p in p_invalid.iter() {
-        println!("invalid page: {:?}, rules: {:?}", p.0, p.1);
-    }
-
-    // TODO figure out how we sort them according to the rules, need a good idea to not get gnarly...
-    for p in p_invalid.iter() {
-        // we got all rules for this page, and the page, how do we sort it, can we pass a closure function
-        //  that sort the rules?
-
-        // swap rules? if current position is invalid, swap it with the one it should be?
-        // continue until sorted?
-
         let mut sorted = false;
         let mut sorted_page = p.0.clone();
-        // todo, while loop until sorted == true, go through all rules, when finding an error we swap positions
+        // while loop until sorted == true, go through all rules, when finding an error we swap positions
         //  then either continues or start over
         while !sorted {
             // check each rule
@@ -87,7 +81,7 @@ pub fn process(input: &str) -> anyhow::Result<String> {
         // sorted, we can sum middle position
         let middle = sorted_page.len() / 2;
         sum += sorted_page[middle];
-        println!("Valid vector: {:?}, mid_index: {}, middle element: {}", sorted_page, middle, sorted_page[middle]);
+        // println!("Valid vector: {:?}, mid_index: {}, middle element: {}", sorted_page, middle, sorted_page[middle]);
     }
 
     Ok(sum.to_string())
