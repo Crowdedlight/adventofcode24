@@ -131,7 +131,7 @@ pub fn process(input: &str) -> anyhow::Result<String> {
     for pos in path {
         matrix.set(pos.0 as usize, pos.1 as usize, 'X');
     }
-    matrix.print();
+    // matrix.print();
 
     Ok(sum.to_string())
 }
