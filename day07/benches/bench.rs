@@ -8,8 +8,12 @@ fn part1_benchmark(c: &mut Criterion) {
 }
 
 fn part2_benchmark(c: &mut Criterion) {
+
+    let mut group = c.benchmark_group("part2");
+    group.sample_size(10);
+    
     let input2 = black_box(include_str!("../input2.txt"));
-    c.bench_function("part 2", |b| b.iter(|| part2::process(input2)));
+    group.bench_function("part 2", |b| b.iter(|| part2::process(input2)));
 }
 
 criterion_group!(benches, part1_benchmark, part2_benchmark);

@@ -99,10 +99,7 @@ pub fn process(input: &str) -> anyhow::Result<String> {
 
     let eqs = input.lines().map(Equation::new).collect::<Vec<Equation>>();
 
-    // for each equation, find the combination of * and +, that gives matches sum
-    //for eq in eqs.iter() {
-    //    let res = find_combination_bruteforce(&eq)?;
-    //}
+    // This is a stupid way to do it.... much better way is doing recursive straight as I did in part 2....
 
     let res: u64 = eqs.iter().filter(|eq| find_combination_bruteforce(eq).unwrap_or(false)).map(|eq| eq.sum).sum();
 

@@ -1,9 +1,14 @@
+use rayon::iter::ParallelIterator;
 use std::cmp::PartialEq;
+use std::collections::VecDeque;
 use std::fmt::{format, Display, Formatter};
+use std::time::SystemTime;
+use anyhow::Context;
+use rayon::prelude::IntoParallelRefIterator;
 
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 struct Equation {
-    pub numbers: Vec<u64>,
+    pub numbers: VecDeque<u64>,
     pub sum: u64
 }
 
@@ -38,96 +43,47 @@ impl Display for Operation {
     }
 }
 
-pub fn find_combination_bruteforce(mut equation: &Equation) -> Result<bool, anyhow::Error> {
+pub fn recursive_test(eq: &Equation) -> bool {
 
-    // bruteforce method, we find all possible combinations of + and *
-    let mut own_eq = equation.clone();
+    let mut own_eq = eq.clone();
 
-    // get all combinations
-    let possible_combos = get_all_combinations(3, own_eq.numbers.len()-1);
-
-    //println!("Possible Combos for : {:?}", equation.numbers);
-    //for o in possible_combos.iter() {
-    //    println!("{:?}", o);
-    //}
-
-    // run through all options and check if we hit sum
-    for opt in possible_combos {
-
-        let mut sum = own_eq.numbers[0];
-
-        for i in 1..own_eq.numbers.len() {
-
-            // calculate sum
-            match opt[i-1] {
-                Operation::Add => sum += own_eq.numbers[i],
-                Operation::Multiply => sum *= own_eq.numbers[i],
-                Operation::Concat => {
-                    // concat, so we take sum and concat with current value
-                    sum = format!("{}{}", sum, own_eq.numbers[i]).parse::<u64>()?;
-                }
-            }
-
-            // early return if we are above target sum
-            if sum > own_eq.sum {
-                break;
-            }
-
-            // return as soon as we find one hitting targed sum
-            if sum == own_eq.sum {
-                print!("valid combo: {} = ", own_eq.sum);
-                for (idx, num) in own_eq.numbers.iter().enumerate() {
-                    if idx == 0 {
-                        print!("{} ", num);
-                    } else {
-                        print!("{} {} ", opt[idx-1], num);
-                    }
-                }
-                println!();
-                
-                return Ok(true);
-            }
-        }
+    let first_elem = own_eq.numbers.pop_front().unwrap();
+    let res = recursive_runner(own_eq.sum, own_eq.numbers.clone(), first_elem);
+    if res {
+        //println!("Valid operations to get sum: {}", eq.sum);
+        true
+    } else {
+        false
     }
-    Ok(false)
 }
 
-// k == size of combinations, n == possible options per element
-pub fn get_all_combinations(n: usize, k: usize) -> Vec<Vec<Operation>> {
-    let mut combinations: Vec<Vec<Operation>> = vec![];
-    let mut current_combination: Vec<Operation> = vec![];
-    let possible_set = vec![Operation::Add, Operation::Multiply, Operation::Concat];
-
-    all_combinations_recursive(&mut combinations, &mut current_combination, &possible_set, n, k);
-    combinations
-}
-
-pub fn all_combinations_recursive(combinations: &mut Vec<Vec<Operation>>, new_combo: &mut Vec<Operation>, possible_set: &Vec<Operation>, n: usize, k: usize) {
-    // base case, k is 0
-    if k == 0 {
-        combinations.push(new_combo.clone());
-        return;
+pub fn recursive_runner(target_sum: u64, mut new_combo: VecDeque<u64>, curr_sum: u64) -> bool {
+    // base case, list is == 1, and the value is our target
+    if new_combo.is_empty() {
+        return curr_sum == target_sum
     }
 
-    // One by one add all operations
-    // from set and recursively
-    // call for k equals to k-1
-    for i in 0..n {
+    // try all three operations
+    let element = new_combo.pop_front().unwrap();
 
-        // take current value and add the next one
-        let mut new_c = new_combo.clone();
-        new_c.push(possible_set[i]);
-
-        // call recursively
-        all_combinations_recursive(combinations, &mut new_c, possible_set, n, k - 1);
-    }
+    let res_a = recursive_runner(target_sum, new_combo.clone(), curr_sum + element);
+    let res_m = recursive_runner(target_sum, new_combo.clone(), curr_sum * element);
+    let res_c = recursive_runner(target_sum, new_combo.clone(), format!("{}{}", curr_sum, element).parse::<u64>().unwrap());
+    
+    res_a || res_m || res_c
 }
 
 pub fn process(input: &str) -> anyhow::Result<String> {
 
+    let start = SystemTime::now();
+    
     let eqs = input.lines().map(Equation::new).collect::<Vec<Equation>>();
 
-    let res: u64 = eqs.iter().filter(|eq| find_combination_bruteforce(eq).unwrap_or(false)).map(|eq| eq.sum).sum();
+
+    let res: u64 = eqs.par_iter().filter(|&eq| recursive_test(eq)).map(|eq| eq.sum).sum();
+    let stop = SystemTime::now();
+
+    println!("Procesing time: {}ms", stop.duration_since(start).unwrap().as_millis());
 
     Ok(res.to_string())
 }

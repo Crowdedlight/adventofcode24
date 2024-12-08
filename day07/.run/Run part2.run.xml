@@ -1,8 +1,8 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run part2" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="buildProfileId" value="dev" />
+    <option name="buildProfileId" value="release" />
     <option name="command" value="run --bin part2" />
-    <option name="workingDirectory" value="file://$PROJECT_DIR$/" />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="true" />
     <option name="channel" value="DEFAULT" />
