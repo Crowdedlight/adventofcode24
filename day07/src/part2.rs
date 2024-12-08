@@ -63,6 +63,10 @@ pub fn recursive_runner(target_sum: u64, mut new_combo: VecDeque<u64>, curr_sum:
         return curr_sum == target_sum
     }
 
+    if curr_sum > target_sum {
+        return false;
+    }
+
     // try all three operations
     let element = new_combo.pop_front().unwrap();
 
