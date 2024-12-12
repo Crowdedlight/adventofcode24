@@ -1,3 +1,4 @@
+use std::cmp::PartialEq;
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone, Default)]
@@ -53,16 +54,17 @@ struct Plot {
 impl Plot {
     pub fn print(&self, include_map: bool) {
         for region in self.regions.iter() {
-            println!("Region: {}, perimeter: {}, area: {}", region.id, region.perimeter, region.positions.len());
+            println!("Region: {}, perimeter: {}, area: {}, sides: {}", region.id, region.perimeter, region.positions.len(), region.sides);
             if include_map {
                 region.print(self.raw_input.clone());
                 println!();
-                println!();
             }
         }
+        println!();
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Copy)]
 enum Direction {
     Up,
     Right,
@@ -70,9 +72,22 @@ enum Direction {
     Down
 }
 
+#[derive(Debug, Clone, Copy)]
 struct Side {
     pos: Pos,
-    dir: Direction,
+    face: Direction,
+}
+
+impl Side {
+    pub fn new(pos: Pos, dir: Direction) -> Self {
+        // we offset positions so the pos is always for the side being on the left or the top
+        //  as otherwise we can't sort it and check for jumps in coordinates
+        match dir {
+            Direction::Left | Direction::Up => Self { pos, face: dir },
+            Direction::Right => Self { pos: Pos::new(pos.x + 1, pos.y), face: dir },
+            Direction::Down => Self { pos: Pos::new(pos.x, pos.y + 1), face: dir },
+        }
+    }
 }
 
 struct Region {
@@ -80,6 +95,7 @@ struct Region {
     id: char,
     perimeter: u64,
     area: u64,
+    sides: u64,
     vertical_sides: Vec<Side>,
     horizontal_sides: Vec<Side>,
 }
@@ -116,9 +132,11 @@ impl PartialEq for Pos {
     }
 }
 
-pub fn search(map: &Matrix, used: &mut Vec<Pos>, start: Pos, id: char) -> Vec<Pos> {
+pub fn search(map: &Matrix, used: &mut Vec<Pos>, start: Pos, id: char) -> (Vec<Pos>, Vec<Side>, Vec<Side>) {
     let mut queue : VecDeque<Pos> = VecDeque::new();
     let mut region: Vec<Pos> = vec![];
+    let mut horizontal_sides: Vec<Side> = vec![];
+    let mut vertical_sides: Vec<Side> = vec![];
     queue.push_back(start);
 
     // while queue has elements
@@ -132,29 +150,30 @@ pub fn search(map: &Matrix, used: &mut Vec<Pos>, start: Pos, id: char) -> Vec<Po
         if map.get_with_pos(&pos).unwrap() == id {
 
             // get the 4 neighbors, if some add to queue, if value is different increase border
-            let search = vec![Pos::new(pos.x, pos.y - 1), Pos::new(pos.x + 1, pos.y), Pos::new(pos.x, pos.y + 1), Pos::new(pos.x - 1, pos.y)];
+            let search_neighbours = vec![Pos::new(pos.x, pos.y - 1), Pos::new(pos.x + 1, pos.y), Pos::new(pos.x, pos.y + 1), Pos::new(pos.x - 1, pos.y)];
 
             // check neighbors
-            for s in search.iter() {
+            for s in search_neighbours.iter() {
                 if let Some(p) = map.get_with_pos(s) {
                     // if id match, add to search
                     if p == id {
                         queue.push_back(*s);
                         continue;
-                    } else {
-                        // if neighbour, increase counter
-                        pos.border += 1;
-                        // add side
-                        // todo
-                        if s.x > pos.x {
-                            todo!()
-                        }
                     }
-                } else {
-                    // outside map, so an outside border
-                    pos.border += 1;
-                    // add side
-                    // todo
+                }
+
+                // if not part of the region, then it is outside the map or a neighbor
+                pos.border += 1;
+
+                // if not part of region, we bounds and add side
+                if s.x > pos.x {
+                    vertical_sides.push(Side::new(pos, Direction::Right))
+                } else if s.x < pos.x {
+                    vertical_sides.push(Side::new(pos, Direction::Left))
+                } else if s.y > pos.y {
+                    horizontal_sides.push(Side::new(pos, Direction::Down))
+                } else if s.y < pos.y {
+                    horizontal_sides.push(Side::new(pos, Direction::Up))
                 }
             }
 
@@ -167,7 +186,7 @@ pub fn search(map: &Matrix, used: &mut Vec<Pos>, start: Pos, id: char) -> Vec<Po
             continue;
         }
     }
-    region
+    (region, horizontal_sides, vertical_sides)
 }
 
 pub fn process(input: &str) -> anyhow::Result<String> {
@@ -191,36 +210,70 @@ pub fn process(input: &str) -> anyhow::Result<String> {
             }
 
             // if not a used position, we start a search to get this region
-            let region_pos = search(&matrix, &mut used, curr_pos, *val);
+            let (region_pos, region_hori, region_vert) = search(&matrix, &mut used, curr_pos, *val);
             let region_border_sum = region_pos.iter().map(|p| p.border).sum::<u64>();
             let region_area = region_pos.len();
-            let new_region = Region {id: *val, positions: region_pos, perimeter: region_border_sum, area: region_area as u64};
+            let new_region = Region {id: *val, positions: region_pos, perimeter: region_border_sum, area: region_area as u64, horizontal_sides: region_hori, vertical_sides: region_vert, sides: 0};
 
             plot.regions.push(new_region);
         }
     }
 
-    // todo figure out how to get sides of a polygon based on points
-    // when we add pos to a region, add sides too? Array for vertical and horizontal sides?
-    // then we can sort horizontal sides by x then y
+    // when we add pos to a region, add sides too. Array for vertical and horizontal sides?
+    // Sides are seen from perspective of left side from vertical and top side for horizontal
+    //  based on position. So a bottom Side would be (pos.x, pos.y+1)
+    // then we can sort horizontal sides by y then x
     // and vertical sides by y then x
-    // vert_sides.sort_unstable_by_key(|side| (side.pos.y, side.pos.x));
 
-    // that should gives us arrays sorted in a way that we can check if facing is different from last facing
-    //  OR x != last_x OR y != last_y + 1
+    for r in plot.regions.iter_mut() {
+        let mut hori = r.horizontal_sides.clone();
+        let mut vert = r.vertical_sides.clone();
 
-    // for vertical we do the same but swap x and y checks.
+        // sort horizontal sides by y, then x
+        hori.sort_unstable_by_key(|side| (side.pos.y, side.pos.x));
+        // sort vertical side by x, then y
+        vert.sort_unstable_by_key(|side| (side.pos.x, side.pos.y));
 
+        // go through each array and count sides
+        let mut sides = 0;
+        // set vals to invalid for first iteration
+        let mut prev_x = -1;
+        let mut prev_y = -1;
+        let mut prev_face = Direction::Left;
 
+        for side in hori.iter() {
+            let x = side.pos.x;
+            let y = side.pos.y;
+            // if we jump y, or jump more than 1 in x, or if side is not the same, we have a new side
+            if y != prev_y || x != prev_x + 1 || side.face != prev_face {
+                sides += 1;
+            }
+            prev_x = x;
+            prev_y = y;
+            prev_face = side.face;
+        }
 
+        // vertical slides turn
+        prev_x = -1;
+        prev_y = -1;
+        prev_face = Direction::Up;
 
-
-
-
-
+        for side in vert.iter() {
+            let x = side.pos.x;
+            let y = side.pos.y;
+            // if we jump x, or jump more than 1 in y, or side not the same, we have a new side
+            if x != prev_x || y != prev_y + 1 || side.face != prev_face {
+                sides += 1;
+            }
+            prev_x = x;
+            prev_y = y;
+            prev_face = side.face;
+        }
+        r.sides = sides;
+    }
 
     // find total price by multiplying regions area and perimeter and summing them
-    let price = plot.regions.iter().map(|p| p.perimeter * p.area).sum::<u64>();
+    let price = plot.regions.iter().map(|p| p.sides * p.area).sum::<u64>();
 
     // print plots
     plot.print(false);
