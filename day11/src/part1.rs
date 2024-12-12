@@ -40,7 +40,7 @@ pub fn process(input: &str) -> anyhow::Result<String> {
         // update master list
         stones = stone_copy;
 
-        println!("Blink: {}, stones: {:?}", n, stones);
+        // println!("Blink: {}, stones: {:?}", n, stones);
     }
 
 

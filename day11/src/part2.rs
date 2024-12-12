@@ -13,7 +13,7 @@ pub fn process(input: &str) -> anyhow::Result<String> {
 
     for n in 0..75 {
 
-        println!("Blink: {}", n+1);
+        // println!("Blink: {}", n+1);
 
         for (key, num) in hashmap.clone().iter() {
             // if val is 0, we skip as it technically does not exist
