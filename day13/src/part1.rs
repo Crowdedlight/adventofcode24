@@ -1,91 +1,148 @@
+use anyhow::anyhow;
+use regex::Regex;
 
+#[derive(Debug)]
 struct Machine {
-    target_x: usize,
-    target_y: usize,
-    a: (usize, usize),
-    b: (usize, usize),
+    target_x: u64,
+    target_y: u64,
+    a: (u64, u64),
+    b: (u64, u64),
 }
 impl Machine {
-    fn new(target_x: usize, target_y: usize, a: (usize, usize), b: (usize, usize)) -> Self {
+    fn new(target_x: u64, target_y: u64, a: (u64, u64), b: (u64, u64)) -> Self {
         Self {target_x, target_y, a, b}
     }
 }
 
 // return press_a, press_b and sum
-pub fn recursive_btn_press(machine: &Machine,  a_press: usize, b_press: usize) -> Option<(usize, usize, usize)> {
+pub fn recursive_btn_press(machine: &Machine,  a_press: u64, b_press: u64) -> Option<(u64, u64, u64)> {
 
     let new_x = machine.a.0 * a_press + machine.b.0 * b_press;
     let new_y = machine.a.1 * a_press + machine.b.1 * b_press;
 
     // base class, check if out of bounds or we reached target
     if new_x == machine.target_x && new_y == machine.target_y {
+        // println!("FOUND: tgt: ({}, {}), curr: ({}, {}), a_press: {}, b_press: {}", machine.target_x, machine.target_y, new_x, new_y, a_press, b_press);
         // found the goal, time to return
         return Some((a_press, b_press, a_press*3 + b_press*1))
+
     }
 
     // check if no solution exists
     if new_x > machine.target_x || new_y > machine.target_y || a_press > 100 || b_press > 100 {
+        // println!("NONE: tgt: ({}, {}), curr: ({}, {}), a_press: {}, b_press: {}", machine.target_x, machine.target_y, new_x, new_y, a_press, b_press);
         return None;
     }
+
+    println!("CONTINUE: tgt: ({}, {}), curr: ({}, {}), a_press: {}, b_press: {}", machine.target_x, machine.target_y, new_x, new_y, a_press, b_press);
 
     // otherwise we try both new options
     let option_a = recursive_btn_press(machine, a_press+1, b_press);
     let option_b = recursive_btn_press(machine, a_press, b_press+1);
 
-    // todo what if both A and B is valid? check which one is cheapest and return that one?
-    if let Some(a) = option_a {
-        return option_a
+    println!("RETURNING: tgt: ({}, {}), curr: ({}, {}), a_press: {}, b_press: {}", machine.target_x, machine.target_y, new_x, new_y, a_press, b_press);
+
+    // if both exists, we find cheapest and return, otherwise we return the one that is some, or none
+    if option_a.is_none() && option_b.is_some() {
+        option_b
+    } else if option_b.is_none() && option_a.is_some() {
+        option_a
+    } else if option_a.is_some() && option_b.is_some() {
+        // return cheapest
+        match option_a?.2 < option_b?.2 {
+            true => {option_a},
+            false => {option_b}
+        }
+    } else {
+        println!("DEADEND: tgt: ({}, {}), curr: ({}, {}), a_press: {}, b_press: {}", machine.target_x, machine.target_y, new_x, new_y, a_press, b_press);
+        None
+    }
+}
+
+pub fn find_solution(m: &Machine) -> anyhow::Result<(u64, u64)> {
+
+    // solve by a substitution to find b
+    let top = (m.a.0 * m.target_y) as f64 - (m.a.1 * m.target_x) as f64;
+    let bottom = (m.a.0 * m.b.1) as f64 - (m.b.0 * m.a.1) as f64;
+
+    let b = top / bottom;
+    let a = (m.target_x as f64 - b * m.b.0 as f64) / m.a.0 as f64;
+
+    if a > 100.0 || b > 100.0 || a < 0.0 || b < 0.0 || a.fract() != 0.0 || b.fract() != 0.0 {
+        return Err(anyhow!("over 100 press on either a or b"))
     }
 
-    todo!()
+    Ok((a as u64, b as u64))
 }
 
 pub fn process(input: &str) -> anyhow::Result<String> {
+
+    let mut machines : Vec<Machine> = vec![];
+
+    let mut re_btn = Regex::new(r"(?:X\+(?<x>\d+)).+(?:Y\+(?<y>\d+))").unwrap();
+    let mut re_tgt = Regex::new(r"(?:X=(?<x>\d+)).+(?:Y=(?<y>\d+))").unwrap();
+
+    // input is split with newline newline
+    let pat = match (cfg!(test), cfg!(windows)) {
+        (false, true) => "\r\n\r\n",
+        (_, false) => "\n\n",
+        _ => "\n\n"
+    };
+
+    for l in input.split(pat) {
+
+        // input here is format:
+        // Button A: X+94, Y+34
+        // Button B: X+22, Y+67
+        // Prize: X=8400, Y=5400
+
+        let mut a_x = 0u64;
+        let mut a_y = 0u64;
+        let mut b_x = 0u64;
+        let mut b_y = 0u64;
+        let mut tgt_x = 0u64;
+        let mut tgt_y = 0u64;
+
+        for (i, line) in l.lines().enumerate() {
+            if i == 0 {
+                // btn a
+                let cap = re_btn.captures(line).unwrap();
+                a_x = cap["x"].parse::<u64>()?;
+                a_y = cap["y"].parse::<u64>()?;
+            } else if i == 1{
+                // btn b
+                let cap = re_btn.captures(line).unwrap();
+                b_x = cap["x"].parse::<u64>()?;
+                b_y = cap["y"].parse::<u64>()?;
+            } else {
+                // tgt input
+                let cap = re_tgt.captures(line).unwrap();
+                tgt_x = cap["x"].parse::<u64>()?;
+                tgt_y = cap["y"].parse::<u64>()?;
+            }
+        }
+        machines.push(Machine::new(tgt_x, tgt_y, (a_x, a_y), (b_x, b_y)));
+    }
+
+    let mut sum = 0u64;
 
     // A costs 3 tokens
     // B cost 1 token
     // Max press per button is 100
 
-    // todo, could do recursive. Every step, I try to both do A or B push, until we hit, or go over the target (x,y), or go over 100 presses on either a/b in total
-    //  keeping track of button presses and returns the sum of (a,b) button press and price?
+    // go through all machines and run recursive
+    for (i, m) in machines.iter().enumerate() {
 
-    // todo minimalisation problem? Plot both as a curve and see if they intersect or local minima?
-    // plot with x,y
-    // example 1: f(1) = 1*94, 1*34,
-    // example 1: f(2) = 2*94, 2*34,
-    // example 1: f(3) = 3*94, 3*34,
-    // Answer: A: 80, B: 40
+        println!("Running machine {}: {:?}...", i+1, m);
 
-    // formula is: min_token = x*a + y*b
-    // min_token_x = 80*a + 34*b
-    // min_token_x = x * a.x + y * b.x
-    // min_token_y = x * a.y + y * b.y
+        // its pure math, 2 equations with 2 unknowns, we do the math and we got an equation for each
+        if let Ok((a, b)) = find_solution(m) {
+            println!("Solution - a_press: {}, b_press: {}, tokens: {}, tgt: ({}, {}), res: ({}, {})", a, b, a*3 + b, m.target_x, m.target_y, a*m.a.0 + b*m.b.0, a*m.a.1 + b*m.b.1);
+            sum += a*3 + b;
+        }
+    }
 
-    // some machines have no combo that allows you to win. Use the 100 per button limit here?
-    // can we be clever here and assume that if we do modula of a, b, and combined, and none of them goes up into target position, then we will never be able to hit it?
-    //
-    // Button A: X+26, Y+66
-    // Button B: X+67, Y+21
-    // Prize: X=12748, Y=12176
-    // 12748 % 26 = 8
-    // 12748 % 67 = 18
-    // 12748 % (26+67) = 7
-
-    // Button A: X+94, Y+34
-    // Button B: X+22, Y+67
-    // Prize: X=8400, Y=5400
-    // 8400 % 94 = 34
-    // 8400 % 22 = 18
-    // 8400 % (94+22) = 48
-
-
-
-    // find the fewest tokens you would spend to win all possible prices
-
-
-    // sum the tokens per machine as that is our answer to minimum spend of tokens to wind all possible prices
-
-    todo!()
+    Ok(sum.to_string())
 }
 
 #[cfg(test)]
